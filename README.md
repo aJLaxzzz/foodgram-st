@@ -23,7 +23,7 @@ Foodgram - это веб-приложение для публикации рец
 ### 1. Клонирование репозитория
 ```bash
 git clone https://github.com/aJLaxzzz/foodgram-st
-cd foodgram-st
+cd foodgram-st/infra
 ```
 
 ### 2. Настройка переменных окружения
