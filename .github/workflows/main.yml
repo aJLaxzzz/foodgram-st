@@ -74,7 +74,7 @@ jobs:
     - name: Вход в Docker Hub
       uses: docker/login-action@v3
       with:
-        username: aJLaxzzz
+        username: ajlaxzzz
         password: ${{ secrets.DOCKER_TOKEN }}
 
     - name: Сборка и отправка backend
@@ -82,7 +82,7 @@ jobs:
       with:
         context: ./backend
         push: true
-        tags: aJLaxzzz/foodgram_backend:latest
+        tags: ajlaxzzz/foodgram_backend:latest
 
   build_and_push_frontend:
     name: Сборка и отправка frontend образа
@@ -100,7 +100,7 @@ jobs:
     - name: Вход в Docker Hub
       uses: docker/login-action@v3
       with:
-        username: aJLaxzzz
+        username: ajlaxzzz
         password: ${{ secrets.DOCKER_TOKEN }}
 
     - name: Сборка и отправка frontend
@@ -108,4 +108,4 @@ jobs:
       with:
         context: ./frontend
         push: true
-        tags: aJLaxzzz/foodgram_frontend:latest
+        tags: ajlaxzzz/foodgram_frontend:latest
