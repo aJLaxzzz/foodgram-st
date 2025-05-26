@@ -34,7 +34,7 @@ POSTGRES_USER=foodgram_user
 POSTGRES_PASSWORD=foodgram_password
 DB_HOST=db
 DB_PORT=5432
-SECRET_KEY=django-insecure-your-secret-key-here-change-in-production
+SECRET_KEY=jsn!a=&x*ru4qpdhjpegle45i_zvfr=axu3&t)-sg+3bsukw@f
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
 
