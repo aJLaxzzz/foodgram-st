@@ -75,7 +75,7 @@ jobs:
       uses: docker/login-action@v3
       with:
         username: aJLaxzzz
-        password: tima2004@
+        password: ${{ secrets.DOCKER_TOKEN }}
 
     - name: Сборка и отправка backend
       uses: docker/build-push-action@v5
@@ -101,7 +101,7 @@ jobs:
       uses: docker/login-action@v3
       with:
         username: aJLaxzzz
-        password: tima2004@
+        password: ${{ secrets.DOCKER_TOKEN }}
 
     - name: Сборка и отправка frontend
       uses: docker/build-push-action@v5
