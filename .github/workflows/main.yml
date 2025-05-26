@@ -1,0 +1,156 @@
+name: Foodgram CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    name: Тестирование кода
+    
+    services:
+      postgres:
+        image: postgres:13.0-alpine
+        env:
+          POSTGRES_USER: foodgram_user
+          POSTGRES_PASSWORD: foodgram_password
+          POSTGRES_DB: foodgram
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+    - name: Проверка репозитория
+      uses: actions/checkout@v4
+
+    - name: Установка Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.9
+
+    - name: Установка зависимостей
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pytest
+        cd backend
+        pip install -r requirements.txt
+
+    - name: Проверка кода с flake8
+      run: |
+        cd backend
+        python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Тестирование Django
+      env:
+        SECRET_KEY: test-secret-key-for-github-actions
+        DEBUG: True
+        USE_SQLITE: True
+        POSTGRES_DB: foodgram
+        POSTGRES_USER: foodgram_user
+        POSTGRES_PASSWORD: foodgram_password
+        DB_HOST: localhost
+        DB_PORT: 5432
+      run: |
+        cd backend
+        python manage.py test
+
+  build_and_push_backend:
+    name: Сборка и отправка backend образа
+    runs-on: ubuntu-latest
+    needs: tests
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Проверка репозитория
+      uses: actions/checkout@v4
+
+    - name: Настройка Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Вход в Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Сборка и отправка backend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        push: true
+        tags: ${{ secrets.DOCKER_USERNAME }}/foodgram_backend:latest
+
+  build_and_push_frontend:
+    name: Сборка и отправка frontend образа
+    runs-on: ubuntu-latest
+    needs: tests
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Проверка репозитория
+      uses: actions/checkout@v4
+
+    - name: Настройка Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Вход в Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Сборка и отправка frontend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        push: true
+        tags: ${{ secrets.DOCKER_USERNAME }}/foodgram_frontend:latest
+
+  deploy:
+    name: Деплой на сервер
+    runs-on: ubuntu-latest
+    needs: 
+      - build_and_push_backend
+      - build_and_push_frontend
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Деплой через SSH
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USER }}
+        key: ${{ secrets.SSH_KEY }}
+        passphrase: ${{ secrets.PASSPHRASE }}
+        script: |
+          cd foodgram
+          sudo docker compose pull
+          sudo docker compose down
+          sudo docker compose up -d
+          sudo docker compose exec -T backend python manage.py migrate
+          sudo docker compose exec -T backend python manage.py collectstatic --noinput
+          sudo docker image prune -f
+
+  send_message:
+    name: Отправка уведомления
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Отправка сообщения в Telegram
+      uses: appleboy/telegram-action@master
+      with:
+        to: ${{ secrets.TELEGRAM_TO }}
+        token: ${{ secrets.TELEGRAM_TOKEN }}
+        message: |
+          🚀 Деплой Foodgram завершен!
+          
+          Автор: ${{ github.actor }}
+          Коммит: ${{ github.event.commits[0].message }}
+          
+          Ссылка: https://github.com/${{ github.repository }}/commit/${{ github.sha }} 
