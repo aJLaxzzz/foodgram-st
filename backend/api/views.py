@@ -7,11 +7,10 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-# from rest_framework.exceptions import PermissionDenied  # Не используется
 from rest_framework.exceptions import NotAuthenticated
 
 from recipes.models import (
-    Ingredient, Tag, Recipe, RecipeIngredient,
+    Ingredient, Tag, Recipe,
     Favorite, ShoppingCart, ShortLink
 )
 from users.models import User, Follow
@@ -82,9 +81,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             serializer = RecipeMinifiedSerializer(recipe)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        favorite = Favorite.objects.filter(
-            user=request.user, recipe=recipe
-        ).first()
+        favorite = request.user.favorites.filter(recipe=recipe).first()
         if not favorite:
             return Response(
                 {'errors': 'Рецепта нет в избранном'},
@@ -114,9 +111,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             serializer = RecipeMinifiedSerializer(recipe)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        cart_item = ShoppingCart.objects.filter(
-            user=request.user, recipe=recipe
-        ).first()
+        cart_item = request.user.shopping_cart.filter(recipe=recipe).first()
         if not cart_item:
             return Response(
                 {'errors': 'Рецепта нет в списке покупок'},
@@ -134,14 +129,12 @@ class RecipeViewSet(viewsets.ModelViewSet):
         """Скачивание списка покупок."""
         user = request.user
 
-        ingredients = RecipeIngredient.objects.filter(
-            recipe__shopping_cart__user=user
-        ).values(
-            'ingredient__name',
-            'ingredient__measurement_unit'
+        ingredients = user.shopping_cart.values(
+            'recipe__recipe_ingredients__ingredient__name',
+            'recipe__recipe_ingredients__ingredient__measurement_unit'
         ).annotate(
-            total_amount=Sum('amount')
-        ).order_by('ingredient__name')
+            total_amount=Sum('recipe__recipe_ingredients__amount')
+        ).order_by('recipe__recipe_ingredients__ingredient__name')
 
         shopping_list = []
         shopping_list.append('Список покупок:\n')
@@ -152,8 +145,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
         else:
             for item in ingredients:
                 shopping_list.append(
-                    f"{item['ingredient__name']} "
-                    f"({item['ingredient__measurement_unit']}) — "
+                    f"{item['recipe__recipe_ingredients__ingredient__name']} "
+                    f"({item['recipe__recipe_ingredients__ingredient__measurement_unit']}) — "
                     f"{item['total_amount']}\n"
                 )
 
@@ -307,7 +300,7 @@ class UserViewSet(viewsets.GenericViewSet):
             )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        follow = Follow.objects.filter(user=user, author=author).first()
+        follow = user.follower.filter(author=author).first()
         if not follow:
             return Response(
                 {'errors': 'Вы не подписаны на этого пользователя'},

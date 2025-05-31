@@ -7,9 +7,10 @@ from rest_framework import serializers
 from djoser.serializers import UserCreateSerializer, UserSerializer
 from recipes.models import (
     Ingredient, Tag, Recipe, RecipeIngredient,
-    Favorite, ShoppingCart, ShortLink
+    ShortLink
 )
-from users.models import User, Follow
+from users.models import User
+from django.conf import settings
 
 
 class Base64ImageField(serializers.ImageField):
@@ -66,9 +67,7 @@ class CustomUserSerializer(UserSerializer):
         """Проверяет, подписан ли текущий пользователь на автора."""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return Follow.objects.filter(
-                user=request.user, author=obj
-            ).exists()
+            return request.user.follower.filter(author=obj).exists()
         return False
 
 
@@ -134,18 +133,14 @@ class RecipeListSerializer(serializers.ModelSerializer):
         """Проверяет, находится ли рецепт в избранном."""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return Favorite.objects.filter(
-                user=request.user, recipe=obj
-            ).exists()
+            return request.user.favorites.filter(recipe=obj).exists()
         return False
 
     def get_is_in_shopping_cart(self, obj):
         """Проверяет, находится ли рецепт в списке покупок."""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return ShoppingCart.objects.filter(
-                user=request.user, recipe=obj
-            ).exists()
+            return request.user.shopping_cart.filter(recipe=obj).exists()
         return False
 
 
@@ -153,18 +148,18 @@ class RecipeIngredientCreateSerializer(serializers.ModelSerializer):
     """Сериализатор для создания ингредиента в рецепте."""
 
     id = serializers.IntegerField()
+    amount = serializers.IntegerField(
+        min_value=settings.MIN_INGREDIENT_AMOUNT,
+        max_value=settings.MAX_INGREDIENT_AMOUNT,
+        error_messages={
+            'min_value': f'Количество должно быть не менее {settings.MIN_INGREDIENT_AMOUNT}.',
+            'max_value': f'Количество должно быть не более {settings.MAX_INGREDIENT_AMOUNT}.',
+        }
+    )
 
     class Meta:
         model = RecipeIngredient
         fields = ('id', 'amount')
-
-    def validate_amount(self, value):
-        """Валидация количества ингредиента."""
-        if value < 1:
-            raise serializers.ValidationError(
-                'Количество ингредиента должно быть больше 0.'
-            )
-        return value
 
 
 class RecipeCreateSerializer(serializers.ModelSerializer):
@@ -175,6 +170,14 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
         queryset=Tag.objects.all(), many=True, required=False
     )
     image = Base64ImageField()
+    cooking_time = serializers.IntegerField(
+        min_value=settings.MIN_COOKING_TIME,
+        max_value=settings.MAX_COOKING_TIME,
+        error_messages={
+            'min_value': f'Время приготовления должно быть не менее {settings.MIN_COOKING_TIME} минуты.',
+            'max_value': f'Время приготовления должно быть не более {settings.MAX_COOKING_TIME} минут.',
+        }
+    )
 
     class Meta:
         model = Recipe
@@ -201,10 +204,6 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     f'Ингредиент с id {item["id"]} не существует.'
                 )
-            if item.get('amount', 0) < 1:
-                raise serializers.ValidationError(
-                    'Количество ингредиента должно быть больше 0.'
-                )
 
         return value
 
@@ -217,30 +216,6 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
 
         return value
 
-    def validate_cooking_time(self, value):
-        """Валидация времени приготовления."""
-        if value is None:
-            raise serializers.ValidationError(
-                'Время приготовления обязательно для заполнения.'
-            )
-
-        if isinstance(value, str):
-            if not value.strip():
-                raise serializers.ValidationError(
-                    'Время приготовления обязательно для заполнения.'
-                )
-            try:
-                value = int(value)
-            except ValueError:
-                raise serializers.ValidationError(
-                    'Время приготовления должно быть числом.'
-                )
-        if not isinstance(value, int) or value < 1:
-            raise serializers.ValidationError(
-                'Время приготовления должно быть положительным числом.'
-            )
-
-        return value
 
     def validate_name(self, value):
         """Валидация названия рецепта."""
